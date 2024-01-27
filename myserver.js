@@ -2,6 +2,7 @@ var http = require("http"); // Requires the built-in http module
 var mustache = require("mustache");
 var express = require('express'); //requires the Express module
 var path = require('path');
+const fs = require('fs');
 
 
 const cors = require("cors");
@@ -35,6 +36,27 @@ let db = client.db(dbName);
 
 app.use(express.json());
 
+//a static file middleware that returns lesson images, or an error message if the image file does not exist
+app.use(function (req, res, next) {
+        console.log("Request IP: " + req.url);
+        console.log("Request date: " + new Date());
+        next();
+});
+app.use('/img',function (req, res, next) {
+        var filePath = path.join(__dirname,'..',"CW2-frontend","img", req.url);
+        fs.stat(filePath, function (err, fileInfo) {
+                if (err) {
+                        next();
+                        return;
+                }
+                if (fileInfo.isFile()) {
+                        res.sendFile(filePath);
+                } else {
+                        next();
+                }
+        });
+});
+
 app.param('lessons', function (req, res, next, lessons) {
         req.collection = db.collection(lessons);
         return next();
@@ -58,13 +80,14 @@ app.get('/collections/:lessons', function (req, res, next) {
 app.post('/collections/:lessons', function (req, res, next) {
         // TODO: Validate req.body
         const order= req.body;
-        console.log(order);
+        console.log(order.info[0].basketInfo);
         req.collection.insertOne(order, function (err, results) {
                 if (err) {
                         return next(err);
                 }
-                res.send(results);
+                 res.send(results);
         });
+        
 });
 
 //DELETE AND Deleting Documents
@@ -81,7 +104,8 @@ app.delete('/collections/:lessons/:id' , function (req, res, next) {
                 );
         });
 
-//PUT
+//PUT REQUEST
+//STORE THE INFOMATION THAT CAME FROM THE PUT REQUEST (URL) and STORED IN SPACES ARRAY 
 app.put('/collections/:lessons' , function (req, res, next) {
                 // TODO: Validate req.body
                 const spaces = req.body;
@@ -89,14 +113,15 @@ app.put('/collections/:lessons' , function (req, res, next) {
                 
                 for(var i=0; i < spaces.availability.length; i++){
 
-                  req.collection.updateOne({ id: spaces.availability[i]._id },
+                  req.collection.updateMany({ id: spaces.availability[i].id },
                          { $set: {availableInventory: spaces.availability[i].spaces} },
-                         { safe: true, multi: false }, function (err, result) {
+                         function (err, result) {
                                 if (err) {
                                         return next(err);
                                 } 
                         }
                   );
+
                 }
                 
                  res.send({ msg: "success" });
@@ -220,6 +245,12 @@ app.set('json spaces', 5);
 //Error Handler
 app.use((request, response) => {
         response.status(404).send('Resource not found ');
+});
+
+//An error message if the image file does not exist
+app.use(function (req, res) {
+        res.status(404);
+        res.send("File not found!");
 });
 
 // Starting the server
